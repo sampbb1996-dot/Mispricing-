@@ -1,0 +1,37 @@
+db_path: "mispricing.sqlite3"
+
+alerting:
+  console: true
+
+governor:
+  max_alerts_per_day_per_detector: 5
+  dormancy:
+    noisy_alert_threshold: 8
+    noisy_days_window: 3
+    dormant_days: 7
+
+detectors:
+  - name: "ebay_auction_vs_bin"
+    kind: "price_spread"
+    enabled: true
+    params:
+      source_a:
+        kind: "json_list"
+        url: "https://svcs.ebay.com/services/search/FindingService/v1"
+        headers:
+          X-EBAY-SOA-SECURITY-APPNAME: "PENDING"
+        list_path: "findItemsByKeywordsResponse.0.searchResult.0.item"
+        title_field: "title.0"
+        price_field: "sellingStatus.0.currentPrice.0.__value__"
+        url_field: "viewItemURL.0"
+      source_b:
+        kind: "json_list"
+        url: "https://svcs.ebay.com/services/search/FindingService/v1"
+        headers:
+          X-EBAY-SOA-SECURITY-APPNAME: "PENDING"
+        list_path: "findItemsByKeywordsResponse.0.searchResult.0.item"
+        title_field: "title.0"
+        price_field: "sellingStatus.0.currentPrice.0.__value__"
+        url_field: "viewItemURL.0"
+      min_abs_profit: 20
+      min_roi: 0.25

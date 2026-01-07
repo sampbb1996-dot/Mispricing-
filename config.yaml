@@ -1,23 +1,14 @@
 detectors:
-  - name: "manual_price_check"
-    kind: "price_spread"
+  - name: "nordvpn_official_vs_reseller"
     enabled: true
     params:
       source_a:
-        kind: "json_list"
-        url: "https://example.com/a.json"
-        list_path: "items"
-        title_field: "title"
-        price_field: "price"
-        url_field: "url"
+        url: "https://nordvpn.com/pricing/"
+        price_regex: 'data-testid="price">\\$([0-9]+\\.?[0-9]*)'
 
       source_b:
-        kind: "json_list"
-        url: "https://example.com/b.json"
-        list_path: "items"
-        title_field: "title"
-        price_field: "price"
-        url_field: "url"
+        url: "https://stacksocial.com/sales/nordvpn-2-year-subscription"
+        price_regex: '\\$([0-9]+\\.?[0-9]*)'
 
-      min_abs_profit: 10
-      min_roi: 0.15
+      min_abs_profit: 20
+      min_roi: 0.20

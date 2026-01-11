@@ -1,51 +1,55 @@
-import yaml
 import requests
-import argparse
-import re
+import time
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+# ---- CONFIG (safe defaults) ----
+PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
+ASSET_ID = "bitcoin"
+VS_CURRENCY = "usd"
 
-def load_config():
-    with open("config.yaml", "r") as f:
-        return yaml.safe_load(f)
+# Reference is a slow EMA maintained locally (not market-driven)
+EMA_ALPHA = 0.01
+_ref_price = None
+_last_ts = 0
 
-def extract_price_html(url, regex):
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    m = re.search(regex, r.text)
-    if not m:
-        raise RuntimeError(f"Price not found at {url}")
-    return float(m.group(1))
 
-def run_detector(det):
-    a = det["params"]["source_a"]
-    b = det["params"]["source_b"]
+def get_market_mispricing_evidence():
+    """
+    Returns:
+        float | None
+        +ve  => uncorrected error (cheap)
+        -ve  => correction pressure
+        None => no update / no evidence
+    """
+    global _ref_price, _last_ts
 
-    pa = extract_price_html(a["url"], a["price_regex"])
-    pb = extract_price_html(b["url"], b["price_regex"])
+    # throttle implicitly (no chunking logic needed)
+    if time.time() - _last_ts < 10:
+        return None
 
-    low, high = min(pa, pb), max(pa, pb)
-    abs_profit = high - low
-    roi = abs_profit / low if low > 0 else 0
-
-    if abs_profit >= det["params"]["min_abs_profit"] and roi >= det["params"]["min_roi"]:
-        print(
-            f"[ALERT] {det['name']} | buy {low:.2f} sell {high:.2f} "
-            f"| profit {abs_profit:.2f} ROI {roi:.2%}"
+    try:
+        r = requests.get(
+            PRICE_URL,
+            params={
+                "ids": ASSET_ID,
+                "vs_currencies": VS_CURRENCY
+            },
+            timeout=5
         )
+        r.raise_for_status()
+        price = r.json()[ASSET_ID][VS_CURRENCY]
+    except Exception:
+        return None
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", nargs="?", default="long")
-    parser.add_argument("--once", action="store_true")
-    args = parser.parse_args()
+    _last_ts = time.time()
 
-    cfg = load_config()
-    for det in cfg["detectors"]:
-        if det.get("enabled"):
-            run_detector(det)
+    if _ref_price is None:
+        _ref_price = price
+        return None
 
-if __name__ == "__main__":
-    main()
+    # update slow reference (human-latency proxy)
+    _ref_price = (1 - EMA_ALPHA) * _ref_price + EMA_ALPHA * price
+
+    # signed relative mispricing
+    evidence = (_ref_price - price) / _ref_price
+
+    return evidence
